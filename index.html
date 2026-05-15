@@ -1,242 +1,56 @@
-<!doctype html>
-<html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="initial-scale=1,user-scalable=no,maximum-scale=1,width=device-width">
-        <meta name="mobile-web-app-capable" content="yes">
-        <meta name="apple-mobile-web-app-capable" content="yes">
-        <link rel="stylesheet" href="css/leaflet.css">
-        <link rel="stylesheet" href="css/L.Control.Layers.Tree.css">
-        <link rel="stylesheet" href="css/L.Control.Locate.min.css">
-        <link rel="stylesheet" href="css/qgis2web.css">
-        <link rel="stylesheet" href="css/fontawesome-all.min.css">
-        <link rel="stylesheet" href="css/leaflet.photon.css">
-        <link rel="stylesheet" href="css/leaflet-measure.css">
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
-        <style>
-        html, body, #map {
-            width: 100%;
-            height: 100%;
-            padding: 0;
-            margin: 0;
-        }
-        </style>
-        <title></title>
-    </head>
-    <body>
-        <div id="map">
-        </div>
-        <script src="js/qgis2web_expressions.js"></script>
-        <script src="js/leaflet.js"></script>
-        <script src="js/L.Control.Layers.Tree.min.js"></script>
-        <script src="js/L.Control.Locate.min.js"></script>
-        <script src="js/leaflet.rotatedMarker.js"></script>
-        <script src="js/leaflet.pattern.js"></script>
-        <script src="js/leaflet-hash.js"></script>
-        <script src="js/Autolinker.min.js"></script>
-        <script src="js/rbush.min.js"></script>
-        <script src="js/labelgun.min.js"></script>
-        <script src="js/labels.js"></script>
-        <script src="js/leaflet.wms.js"></script>
-        <script src="js/leaflet.photon.js"></script>
-        <script src="js/leaflet-measure.js"></script>
+from pathlib import Path
 
+input_file = Path("/mnt/data/index(1).html")
+html = input_file.read_text(encoding="utf-8")
+
+# Add required CSS
+css_add = """
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+"""
+
+html = html.replace(
+    '<link rel="stylesheet" href="css/leaflet-measure.css">',
+    '<link rel="stylesheet" href="css/leaflet-measure.css">\n' + css_add
+)
+
+# Add required JS libraries
+js_add = """
         <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
         <script src="https://unpkg.com/@turf/turf@6/turf.min.js"></script>
+        <script src="https://unpkg.com/leaflet-filelayer@1.2.0/leaflet.filelayer.js"></script>
+        <script src="https://unpkg.com/togeojson@0.16.0/dist/togeojson.js"></script>
+"""
 
-        <script>
-        var map = L.map('map', {
-            zoomControl:false, maxZoom:28, minZoom:1
-        }).fitBounds([[11.046906007336066,75.75764839011373],[11.186826369210895,76.03771227233528]]);
-        var hash = new L.Hash(map);
-        map.attributionControl.setPrefix('<a href="https://github.com/qgis2web/qgis2web" target="_blank">qgis2web</a> &middot; <a href="https://leafletjs.com" title="A JS library for interactive maps">Leaflet</a> &middot; <a href="https://qgis.org">QGIS</a>');
-        var autolinker = new Autolinker({truncate: {length: 30, location: 'smart'}});
-        // remove popup's row if "visible-with-data"
-        function removeEmptyRowsFromPopupContent(content, feature) {
-         var tempDiv = document.createElement('div');
-         tempDiv.innerHTML = content;
-         var rows = tempDiv.querySelectorAll('tr');
-         for (var i = 0; i < rows.length; i++) {
-             var td = rows[i].querySelector('td.visible-with-data');
-             var key = td ? td.id : '';
-             if (td && td.classList.contains('visible-with-data') && feature.properties[key] == null) {
-                 rows[i].parentNode.removeChild(rows[i]);
-             }
-         }
-         return tempDiv.innerHTML;
-        }
-        // modify popup if contains media
-        function addClassToPopupIfMedia(content, popup) {
-            var tempDiv = document.createElement('div');
-            tempDiv.innerHTML = content;
-            var imgTd = tempDiv.querySelector('td img');
-            if (imgTd) {
-                var src = imgTd.getAttribute('src');
-                if (/\.(jpg|jpeg|png|gif|bmp|webp|avif)$/i.test(src)) {
-                    popup._contentNode.classList.add('media');
-                    setTimeout(function() {
-                        popup.update();
-                    }, 10);
-                } else if (/\.(mp3|wav|ogg|aac)$/i.test(src)) {
-                    var audio = document.createElement('audio');
-                    audio.controls = true;
-                    audio.src = src;
-                    imgTd.parentNode.replaceChild(audio, imgTd);
-                    popup._contentNode.classList.add('media');
-                    setTimeout(function() {
-                        popup.setContent(tempDiv.innerHTML);
-                        popup.update();
-                    }, 10);
-                } else if (/\.(mp4|webm|ogg|mov)$/i.test(src)) {
-                    var video = document.createElement('video');
-                    video.controls = true;
-                    video.src = src;
-                    video.style.width = "400px";
-                    video.style.height = "300px";
-                    video.style.maxHeight = "60vh";
-                    video.style.maxWidth = "60vw";
-                    imgTd.parentNode.replaceChild(video, imgTd);
-                    popup._contentNode.classList.add('media');
-                    // Aggiorna il popup quando il video carica i metadati
-                    video.addEventListener('loadedmetadata', function() {
-                        popup.update();
-                    });
-                    setTimeout(function() {
-                        popup.setContent(tempDiv.innerHTML);
-                        popup.update();
-                    }, 10);
-                } else {
-                    popup._contentNode.classList.remove('media');
-                }
-            } else {
-                popup._contentNode.classList.remove('media');
-            }
-        }
-        var zoomControl = L.control.zoom({
-            position: 'topleft'
-        }).addTo(map);
-        L.control.locate({locateOptions: {maxZoom: 19}}).addTo(map);
-        var measureControl = new L.Control.Measure({
-            position: 'topleft',
-            primaryLengthUnit: 'meters',
-            secondaryLengthUnit: 'kilometers',
-            primaryAreaUnit: 'sqmeters',
-            secondaryAreaUnit: 'hectares'
-        });
-        measureControl.addTo(map);
-        document.getElementsByClassName('leaflet-control-measure-toggle')[0].innerHTML = '';
-        document.getElementsByClassName('leaflet-control-measure-toggle')[0].className += ' fas fa-ruler';
-        var bounds_group = new L.featureGroup([]);
+html = html.replace(
+    '<script src="js/leaflet-measure.js"></script>',
+    '<script src="js/leaflet-measure.js"></script>\n' + js_add
+)
 
-// Drawing Feature Group
+# Add upload input
+upload_input = """
+        <input type="file" id="fileInput" accept=".geojson,.json,.kml" style="display:none" />
+"""
+
+html = html.replace(
+    '<div id="map">',
+    upload_input + '\n        <div id="map">'
+)
+
+# Add drawing layer group
+draw_layer = """
+        // Drawing Layer Group
         var drawnItems = new L.FeatureGroup();
         map.addLayer(drawnItems);
+"""
 
-        function setBounds() {
-        }
-        map.createPane('pane_GoogleHybrid_0');
-        map.getPane('pane_GoogleHybrid_0').style.zIndex = 400;
-        var layer_GoogleHybrid_0 = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-            pane: 'pane_GoogleHybrid_0',
-            opacity: 1.0,
-            attribution: '<a href="https://www.google.at/permissions/geoguidelines/attr-guide.html">Map data ©2015 Google</a>',
-            minZoom: 1,
-            maxZoom: 28,
-            minNativeZoom: 0,
-            maxNativeZoom: 20
-        });
-        layer_GoogleHybrid_0;
-        map.createPane('pane_GoogleRoad_1');
-        map.getPane('pane_GoogleRoad_1').style.zIndex = 401;
-        var layer_GoogleRoad_1 = L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
-            pane: 'pane_GoogleRoad_1',
-            opacity: 1.0,
-            attribution: '<a href="https://www.google.at/permissions/geoguidelines/attr-guide.html">Map data ©2015 Google</a>',
-            minZoom: 1,
-            maxZoom: 28,
-            minNativeZoom: 0,
-            maxNativeZoom: 20
-        });
-        layer_GoogleRoad_1;
-        map.addLayer(layer_GoogleRoad_1);
-        map.createPane('pane_SuveyPlots_2019_2');
-        map.getPane('pane_SuveyPlots_2019_2').style.zIndex = 402;
-        var layer_SuveyPlots_2019_2 = L.WMS.layer("https://ksrec.in/geoserver/Kerala/wms", "Suvey Plots_2019", {
-            pane: 'pane_SuveyPlots_2019_2',
-            format: 'image/png',
-            uppercase: true,
-            transparent: true,
-            continuousWorld : true,
-            tiled: true,
-            info_format: 'text/html',
-            opacity: 1,
-            identify: false,
-            attribution: '',
-        });
-        map.createPane('pane_Kerala_Village_Boundary_IKM_Draft_3');
-        map.getPane('pane_Kerala_Village_Boundary_IKM_Draft_3').style.zIndex = 403;
-        var layer_Kerala_Village_Boundary_IKM_Draft_3 = L.WMS.layer("https://ksrec.in/geoserver/Kerala/wms", "Kerala_Village_Boundary_IKM_Draft", {
-            pane: 'pane_Kerala_Village_Boundary_IKM_Draft_3',
-            format: 'image/png',
-            uppercase: true,
-            transparent: true,
-            continuousWorld : true,
-            tiled: true,
-            info_format: 'text/html',
-            opacity: 1,
-            identify: false,
-            attribution: '',
-        });
-        map.addLayer(layer_Kerala_Village_Boundary_IKM_Draft_3);
-        map.createPane('pane_LSGD_BOUNDARY_KERALA_4');
-        map.getPane('pane_LSGD_BOUNDARY_KERALA_4').style.zIndex = 404;
-        var layer_LSGD_BOUNDARY_KERALA_4 = L.WMS.layer("https://ksrec.in/geoserver/Kerala/wms", "LSGD_BOUNDARY_KERALA", {
-            pane: 'pane_LSGD_BOUNDARY_KERALA_4',
-            format: 'image/png',
-            uppercase: true,
-            transparent: true,
-            continuousWorld : true,
-            tiled: true,
-            info_format: 'text/html',
-            opacity: 1,
-            identify: false,
-            attribution: '',
-        });
-        map.createPane('pane_Cadastry_Kerala_new_5');
-        map.getPane('pane_Cadastry_Kerala_new_5').style.zIndex = 405;
-        var layer_Cadastry_Kerala_new_5 = L.WMS.layer("https://ksrec.in/geoserver/Kerala/wms", "Cadastry_Kerala", {
-            pane: 'pane_Cadastry_Kerala_new_5',
-            format: 'image/png',
-            uppercase: true,
-            transparent: true,
-            continuousWorld : true,
-            tiled: true,
-            info_format: 'text/html',
-            opacity: 1,
-            identify: false,
-            attribution: '',
-        });
-        map.addLayer(layer_Cadastry_Kerala_new_5);
-        var overlaysTree = [
-            {label: "Cadastry_Kerala_new", layer: layer_Cadastry_Kerala_new_5},
-            {label: "LSGD_BOUNDARY_KERALA", layer: layer_LSGD_BOUNDARY_KERALA_4},
-            {label: "Kerala_Village_Boundary_IKM_Draft", layer: layer_Kerala_Village_Boundary_IKM_Draft_3},
-            {label: "Suvey Plots_2019", layer: layer_SuveyPlots_2019_2},
-            {label: "Google Road", layer: layer_GoogleRoad_1, radioGroup: 'bm' },
-            {label: "Google Hybrid", layer: layer_GoogleHybrid_0},]
-        var lay = L.control.layers.tree(null, overlaysTree,{
-            //namedToggle: true,
-            //selectorBack: false,
-            //closedSymbol: '&#8862; &#x1f5c0;',
-            //openedSymbol: '&#8863; &#x1f5c1;',
-            //collapseAll: 'Collapse all',
-            //expandAll: 'Expand all',
-            collapsed: true,
-        });
-        lay.addTo(map);
+html = html.replace(
+    'var bounds_group = new L.featureGroup([]);',
+    'var bounds_group = new L.featureGroup([]);\n' + draw_layer
+)
 
-        // Draw Control
+# Add advanced tools before setBounds()
+advanced_tools = """
+        // Draw Controls
         var drawControl = new L.Control.Draw({
             edit: {
                 featureGroup: drawnItems
@@ -253,15 +67,17 @@
 
         map.addControl(drawControl);
 
-        // Draw Created Event
+        // Draw Event
         map.on(L.Draw.Event.CREATED, function (e) {
-            var type = e.layerType,
-                layer = e.layer;
+
+            var type = e.layerType;
+            var layer = e.layer;
 
             drawnItems.addLayer(layer);
 
             // Area Calculation
             if (type === 'polygon' || type === 'rectangle') {
+
                 var geojson = layer.toGeoJSON();
                 var area = turf.area(geojson);
 
@@ -273,10 +89,10 @@
                     areaText = (area / 10000).toFixed(2) + ' hectares';
                 }
 
-                layer.bindPopup('Area: ' + areaText).openPopup();
+                layer.bindPopup('<b>Area:</b> ' + areaText).openPopup();
             }
 
-            // Marker with Note and Direction
+            // Marker Note + Direction
             if (type === 'marker') {
 
                 var note = prompt('Enter note for this location:');
@@ -299,30 +115,42 @@
 
         // Export GeoJSON
         function exportGeoJSON() {
+
             var data = drawnItems.toGeoJSON();
-            var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data));
+
+            var dataStr =
+                "data:text/json;charset=utf-8," +
+                encodeURIComponent(JSON.stringify(data));
 
             var dlAnchorElem = document.createElement('a');
+
             dlAnchorElem.setAttribute('href', dataStr);
             dlAnchorElem.setAttribute('download', 'drawn_features.geojson');
+
             dlAnchorElem.click();
         }
 
+        // Export Button
         var exportButton = L.control({position: 'topright'});
 
         exportButton.onAdd = function(map) {
-            var div = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+
+            var div = L.DomUtil.create(
+                'div',
+                'leaflet-bar leaflet-control leaflet-control-custom'
+            );
 
             div.innerHTML = '⬇';
+
             div.style.backgroundColor = 'white';
             div.style.width = '34px';
             div.style.height = '34px';
             div.style.lineHeight = '34px';
             div.style.textAlign = 'center';
             div.style.cursor = 'pointer';
-            div.title = 'Export GeoJSON';
+            div.title = 'Download GeoJSON';
 
-            div.onclick = function(){
+            div.onclick = function() {
                 exportGeoJSON();
             }
 
@@ -331,8 +159,121 @@
 
         exportButton.addTo(map);
 
+        // Upload Button
+        var uploadButton = L.control({position: 'topright'});
 
-        setBounds();
-        </script>        
-    </body>
-</html>
+        uploadButton.onAdd = function(map) {
+
+            var div = L.DomUtil.create(
+                'div',
+                'leaflet-bar leaflet-control leaflet-control-custom'
+            );
+
+            div.innerHTML = '⬆';
+
+            div.style.backgroundColor = 'white';
+            div.style.width = '34px';
+            div.style.height = '34px';
+            div.style.lineHeight = '34px';
+            div.style.textAlign = 'center';
+            div.style.cursor = 'pointer';
+            div.title = 'Upload KML/GeoJSON';
+
+            div.onclick = function() {
+                document.getElementById('fileInput').click();
+            }
+
+            return div;
+        };
+
+        uploadButton.addTo(map);
+
+        // File Upload Handling
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+
+            var file = e.target.files[0];
+
+            if (!file) return;
+
+            var reader = new FileReader();
+
+            reader.onload = function(event) {
+
+                var text = event.target.result;
+
+                // GeoJSON / JSON
+                if (
+                    file.name.toLowerCase().endsWith('.geojson') ||
+                    file.name.toLowerCase().endsWith('.json')
+                ) {
+
+                    var geojson = JSON.parse(text);
+
+                    var geoLayer = L.geoJSON(geojson, {
+                        onEachFeature: function(feature, layer) {
+
+                            if (feature.properties) {
+
+                                var popup = '';
+
+                                for (var key in feature.properties) {
+                                    popup += '<b>' + key + ':</b> ' +
+                                             feature.properties[key] + '<br>';
+                                }
+
+                                layer.bindPopup(popup);
+                            }
+                        }
+                    });
+
+                    geoLayer.addTo(map);
+
+                    map.fitBounds(geoLayer.getBounds());
+                }
+
+                // KML
+                else if (file.name.toLowerCase().endsWith('.kml')) {
+
+                    var parser = new DOMParser();
+
+                    var kml = parser.parseFromString(text, 'text/xml');
+
+                    var geojson = toGeoJSON.kml(kml);
+
+                    var kmlLayer = L.geoJSON(geojson, {
+                        onEachFeature: function(feature, layer) {
+
+                            if (feature.properties) {
+
+                                var popup = '';
+
+                                for (var key in feature.properties) {
+                                    popup += '<b>' + key + ':</b> ' +
+                                             feature.properties[key] + '<br>';
+                                }
+
+                                layer.bindPopup(popup);
+                            }
+                        }
+                    });
+
+                    kmlLayer.addTo(map);
+
+                    map.fitBounds(kmlLayer.getBounds());
+                }
+            };
+
+            reader.readAsText(file);
+        });
+
+"""
+
+html = html.replace(
+    '        setBounds();',
+    advanced_tools + '\n        setBounds();'
+)
+
+output_file = "/mnt/data/full_featured_map_index.html"
+Path(output_file).write_text(html, encoding="utf-8")
+
+print("Created:", output_file)
